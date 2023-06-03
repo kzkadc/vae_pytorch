@@ -1,14 +1,14 @@
+from typing import Any, Iterable
+from dataclasses import dataclass
+from pathlib import Path
+import copy
+
 import torch
 from torch import nn
 from torch.utils.data.dataloader import DataLoader
 from ignite.engine.engine import Engine
 
 import matplotlib.pyplot as plt
-
-from typing import Any, Dict, Iterable, List
-from dataclasses import dataclass
-from pathlib import Path
-import copy
 
 
 @dataclass
@@ -26,8 +26,8 @@ class StateLogger:
     engine: Engine
 
     def __post_init__(self):
-        self.metrics: List[Dict[str, Any]] = []
-        self.epochs: List[int] = []
+        self.metrics: list[dict[str, Any]] = []
+        self.epochs: list[int] = []
 
     def __call__(self, engine: Engine):
         self.epochs.append(engine.state.epoch)

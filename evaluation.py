@@ -1,51 +1,43 @@
+from dataclasses import dataclass
+
 import torch
 from torch import Tensor
 from ignite.engine.engine import Engine
-from ignite.metrics import Average
-
-from dataclasses import dataclass
-from typing import Tuple, Dict
+from ignite.metrics import Loss
 
 from model import VAE
-from loss import vae_loss
+from loss import recon_loss, kl_div_loss
 
 
 @dataclass
-class VAEEvaluator:
+class VAEEvaluator(Engine):
     net: VAE
     device: torch.device
 
+    def __post_init__(self):
+        super().__init__(self)
+
+        x_ot = lambda d: (d["x_recon"], d["x"])
+        Loss(recon_loss, x_ot).attach(self, "recon_loss")
+        z_ot = lambda d: (d["z_mean"], d["z_std"])
+        Loss(kl_div_loss, z_ot).attach(self, "kl_div")
+
+    @torch.no_grad()
     def __call__(self,
                  engine: Engine,
-                 batch: Tuple[Tensor,
-                              Tensor]) -> Dict[str,
-                                               Tensor]:
+                 batch: tuple[Tensor, Tensor]) -> dict[str, Tensor]:
         self.net.eval()
 
         x, _ = batch
         x = x.to(self.device)
 
-        with torch.no_grad():
-            z_mean, z_std = self.net.encode(x)
-            z = self.net.sample(z_mean, z_std)
-            x_recon = self.net.decode(z)
+        z_mean, z_std = self.net.encode(x)
+        z = self.net.sample(z_mean, z_std)
+        x_recon = self.net.decode(z)
 
-            loss_dict = vae_loss(x_recon, x, z_mean, z_std)
-
-        return loss_dict
-
-
-def attach_metrics(engine: Engine):
-    Average(output_transform=lambda d: d["loss"]).attach(engine, "loss")
-    Average(output_transform=lambda d: d["kl_div"]).attach(engine, "kl_div")
-    Average(
-        output_transform=lambda d: d["recon_loss"]).attach(
-        engine,
-        "recon_loss")
-
-
-def create_evaluator(net: VAE, device: torch.device) -> Engine:
-    evaluator = Engine(VAEEvaluator(net, device))
-    attach_metrics(evaluator)
-
-    return evaluator
+        return {
+            "x": x,
+            "x_recon": x_recon,
+            "z_mean": z_mean,
+            "z_std": z_std
+        }
